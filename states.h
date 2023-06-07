@@ -160,6 +160,16 @@ int linear(int x)
 	return x+mult;
 }
 
+bool moveleft=false, moveright=false;
+int USR(int x)
+{
+	if(moveleft==true)x=x-5;
+	if(moveright==true)x=x+5;
+	if(x>WIDTH-10)x=WIDTH-10;
+	if(x<10)x=10;
+	return x;
+}
+bool shot=false;
 // Define bullet generator
 class Spawner{
 	private:
@@ -168,7 +178,6 @@ class Spawner{
 		int (*dx)(int);
 		int (*dy)(int);
 		int freq;
-		int ind;
 		BulletHandler beta;
 	public:
 		Spawner(){
@@ -176,7 +185,6 @@ class Spawner{
 		}
 		Spawner(int xx, int yy, int f, int (*dxx)(int), int (*dyy)(int))
 		{
-			ind=0;
 			x=xx;
 			y=yy;
 			dx=dxx;
@@ -188,22 +196,23 @@ class Spawner{
 		{
 			x=dx(x);
 			y=dy(y);
+			Rectangle(bufdc, x-10, y-10, x+10, y+10);
 		}
 		void Shoot()
 		{
-			Rectangle(bufdc, x-10, y-10, x+10, y+10);
 			beta.UpdateAllBullets();
 			beta.DrawAllBullets();
 			static int res=0;
 			res++;
 			if(res<freq)return;
 			res=0;
-			beta.addBullet(x,y,rand()%10-5,5);
+			beta.addBullet(x,y+10,rand()%10-5,5);
 		}
 };
 
 #define FPS 30
-Spawner Sss(WIDTH/2,HEIGHT/2,5, linear, constant);
+Spawner Sss(WIDTH/2,HEIGHT/2, 5, linear, constant);
+Spawner Player(WIDTH/2, HEIGHT-10, 0, USR, constant);
 void King(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
 	SetTimer(hwnd, 1, 1000/FPS, 0);
@@ -219,6 +228,40 @@ void Godfather(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
 	Rectangle(bufdc, 0,0,WIDTH, HEIGHT);
 	Sss.move();
+	Player.move();
 	Sss.Shoot();
+	//Player.Shoot();
 	Render(hwnd);
+}
+
+void KeyDown(WPARAM w)
+{
+	switch(w)
+	{
+		case VK_LEFT:
+			moveleft=true;
+			break;
+		case VK_RIGHT:
+			moveright=true;
+			break;
+		case 0x5a: //Z
+			shot=true;
+			break;
+	}
+}
+
+void KeyUp(WPARAM w)
+{
+	switch(w)
+	{
+		case VK_LEFT:
+			moveleft=false;
+			break;
+		case VK_RIGHT:
+			moveright=false;
+			break;
+		case 0x5a: //Z
+			shot=false;
+			break;
+	}
 }

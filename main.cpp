@@ -12,6 +12,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 		case WM_TIMER:
 			Godfather(hwnd, Message, wParam, lParam);
 			break;
+		case WM_KEYDOWN:
+			KeyDown(wParam);
+			break;
+		case WM_KEYUP:
+			KeyUp(wParam);
+			break;
 		default:
 			return DefWindowProc(hwnd, Message, wParam, lParam);
 	}
@@ -38,7 +44,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		return 0;
 	}
 
-	hwnd = CreateWindowEx(WS_EX_CLIENTEDGE,"WindowClass","BRO CODE",WS_VISIBLE|WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,WIDTH,HEIGHT,NULL,NULL,hInstance,NULL);
+	hwnd = CreateWindowEx(WS_EX_CLIENTEDGE,"WindowClass","BRO CODE",WS_VISIBLE|WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,WIDTH+50,HEIGHT+50,NULL,NULL,hInstance,NULL);
 	if(hwnd == NULL) {
 		MessageBox(NULL, "Window Creation Failed!","Error!",MB_ICONEXCLAMATION|MB_OK);
 		return 0;

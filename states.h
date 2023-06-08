@@ -4,11 +4,40 @@
 #define WIDTH 800
 #define HEIGHT 600
 
-HDC bufdc;
+// Define game states
+enum S_Game {SG_splash, SG_mainmenu, SG_loading, SG_ingame, SG_pause};
+S_Game ss;
 
-void DrawBullet(int x, int y)
+HDC bufdc;
+HPEN enc, plc, def,brdrls;
+
+HDC PauseScreen;
+void DrawPauseScreen()
 {
+	BitBlt(bufdc, WIDTH/2-125, HEIGHT/2-50, 250, 100, PauseScreen,0,0,SRCCOPY);
+}
+
+HDC mainmenu;
+void DrawMainMenu(int value)
+{
+	BitBlt(bufdc, 0, 0, WIDTH, HEIGHT, mainmenu, 0,0, SRCCOPY);
+	//HBRUSH hbr = CreateSolidBrush(RGB(value,value,value));
+	// 418,84 thru 730,361
+	//RECT r={418,84,730,361};
+}
+
+void DrawBullet(bool ID, int x, int y)
+{
+	if(ID)SelectObject(bufdc, plc);
+	else SelectObject(bufdc, enc);
+	
 	Ellipse(bufdc, x-10,y-10,x+10,y+10);
+}
+
+void ClearScreen()
+{
+	SelectObject(bufdc, def);
+	Rectangle(bufdc, 0,0,WIDTH, HEIGHT);
 }
 
 void Render(HWND hwnd)
@@ -18,22 +47,34 @@ void Render(HWND hwnd)
 	ReleaseDC(hwnd, hdc);
 }
 
+HDC herosprites[2],hedzth;
+int spritelatch=3;
+bool spritechange=false;
 
-// Define game states
-enum S_Game{
-	SG_splash, SG_mainmenu, SG_ingame, SG_pause
-};
-
-// Define player states
-enum S_Player{
-	SP_stand, SP_Lm1, SP_Lm2, SP_Rm1, SP_Rm2
-};
-
-
+void RenderSpawner(bool ID, int x, int y)
+{
+	if(ID)
+	{
+		if(spritechange&&(spritelatch>0))
+		{
+			TransparentBlt(bufdc, x-32, y-32, 64, 64, herosprites[1],0,0,64,64,RGB(255,255,255));
+			spritelatch--;
+		}
+		else
+		{
+			TransparentBlt(bufdc, x-32, y-32, 64, 64, herosprites[0],0,0,64,64,RGB(255,255,255));
+		}
+	}
+	else
+	{
+		TransparentBlt(bufdc, x-32, y-32, 64, 64, hedzth,0,0,64,64,RGB(255,255,255));
+	}
+}
 
 // Define bullets
 class Bullet{
 	private:
+		bool ID;
 		int x;
 		int y;
 		int dx;
@@ -42,14 +83,16 @@ class Bullet{
 		Bullet(){
 			
 		}
-		Bullet(int xi, int yi, int xu, int yu)
+		Bullet(bool I,int xi, int yi, int xu, int yu)
 		{
+			ID=I;
 			x=xi;y=yi;
 			dx=xu;
 			dy=yu;
 		}
-		void Set(int xi, int yi, int xu, int yu)
+		void Set(bool I,int xi, int yi, int xu, int yu)
 		{
+			ID=I;
 			x=xi;y=yi;
 			dx=xu;
 			dy=yu;
@@ -80,9 +123,21 @@ class Bullet{
 			}
 			return true;
 		}
+		bool checkCollision()// For spawner
+		{
+			if(ID)// If player 
+			{
+				// Check if 
+			}
+			else// If opponent
+			{
+				
+			}
+			return false;
+		}
 		void Draw()
 		{
-			DrawBullet(x,y);
+			DrawBullet(ID,x,y);
 		}
 };
 
@@ -113,10 +168,10 @@ class BulletHandler{
 				iter = temp;
 			}
 		}
-		void addBullet(int xi, int yi, int xu, int yu)
+		void addBullet(bool ID,int xi, int yi, int xu, int yu)
 		{
 			BulletList* nn = new BulletList;
-			nn->B.Set(xi, yi, xu, yu);
+			nn->B.Set(ID,xi, yi, xu, yu);
 			nn->next = sira;
 			sira = nn;
 		}
@@ -126,13 +181,18 @@ class BulletHandler{
 			BulletList* iter = sira; BulletList* prev=sira;
 			while(iter->next!=0)
 			{
-				if(!iter->B.Update())
+				if( (!iter->B.Update())
+						/*||
+				(!iter->B.checkCollision())*/ )
 				{
 					// Delete the bullet
-					prev->next=iter->next;
-					delete iter;
-					iter=prev->next;
-					continue;
+					if(prev!=iter)
+					{
+						prev->next=iter->next;
+						delete iter;
+						iter=prev->next;
+						continue;
+					}
 				}
 				prev=iter;
 				iter=iter->next;
@@ -146,6 +206,7 @@ class BulletHandler{
 			}
 		}
 };
+BulletHandler beta;
 
 int constant(int x)
 {
@@ -165,11 +226,11 @@ int USR(int x)
 {
 	if(moveleft==true)x=x-5;
 	if(moveright==true)x=x+5;
-	if(x>WIDTH-10)x=WIDTH-10;
-	if(x<10)x=10;
+	if(x>WIDTH-32)x=WIDTH-32;
+	if(x<32)x=32;
 	return x;
 }
-bool shot=false;
+bool shot=false,toggle=false;
 // Define bullet generator
 class Spawner{
 	private:
@@ -178,15 +239,18 @@ class Spawner{
 		int (*dx)(int);
 		int (*dy)(int);
 		int freq;
-		BulletHandler beta;
+		signed int res;
+		bool ind;
 	public:
 		Spawner(){
 			
 		}
-		Spawner(int xx, int yy, int f, int (*dxx)(int), int (*dyy)(int))
+		Spawner(bool in,int xx, int yy, int f, int (*dxx)(int), int (*dyy)(int))
 		{
+			ind=in;
 			x=xx;
 			y=yy;
+			res=0;
 			dx=dxx;
 			dy=dyy;
 			freq=f;
@@ -196,43 +260,117 @@ class Spawner{
 		{
 			x=dx(x);
 			y=dy(y);
-			Rectangle(bufdc, x-10, y-10, x+10, y+10);
+			RenderSpawner(ind, x, y);
 		}
+		int retx(){return x;}
+		int rety(){return y;}
 		void Shoot()
 		{
-			beta.UpdateAllBullets();
-			beta.DrawAllBullets();
-			static int res=0;
-			res++;
-			if(res<freq)return;
-			res=0;
-			beta.addBullet(x,y+10,rand()%10-5,5);
+			if(ind)
+			{
+				if(shot&(!toggle))
+				{
+					beta.addBullet(true,x,y-40,0,-10);
+					toggle=true;
+					return;
+				}
+			}
+			else
+			{
+				res++;
+				if(res<freq)return;
+				res=0;
+				beta.addBullet(false,x,y+40,rand()%10-5,5);
+			}
 		}
 };
 
-#define FPS 30
-Spawner Sss(WIDTH/2,HEIGHT/2, 5, linear, constant);
-Spawner Player(WIDTH/2, HEIGHT-10, 0, USR, constant);
+class Tiles{
+	private:
+		int x;
+		int y;
+		
+};
+
+#define FPS 60
+Spawner Sss(false, WIDTH/2,HEIGHT/2-100, 4, linear, constant);
+Spawner Player(true, WIDTH/2, HEIGHT-10, 60, USR, constant);
 void King(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
 	SetTimer(hwnd, 1, 1000/FPS, 0);
 	HDC screendc=GetDC(hwnd);
+	// Generate Screen buffer
 	bufdc = CreateCompatibleDC(screendc);
 	HBITMAP bufbit = CreateCompatibleBitmap(screendc, WIDTH, HEIGHT);
 	SelectObject(bufdc, bufbit);
+	// Load hero bitmap 1
+	HBITMAP kek = (HBITMAP)LoadImage(0, "Hero.bmp",0, 0, 0, LR_LOADFROMFILE);
+	herosprites[0]=CreateCompatibleDC(screendc);
+	SelectObject(herosprites[0],kek);
+	// Load hero bitmap 2
+	kek = (HBITMAP)LoadImage(0, "Hero-fire.bmp",0, 0, 0, LR_LOADFROMFILE);
+	herosprites[1]=CreateCompatibleDC(screendc);
+	SelectObject(herosprites[1],kek);
+	// Load antagonist
+	kek = (HBITMAP)LoadImage(0, "Antagonist.bmp",0, 0, 0, LR_LOADFROMFILE);
+	hedzth=CreateCompatibleDC(screendc);
+	SelectObject(hedzth,kek);
+	// Load pause screen
+	kek = (HBITMAP)LoadImage(0, "Pause.bmp",0, 0, 0, LR_LOADFROMFILE);
+	PauseScreen=CreateCompatibleDC(screendc);
+	SelectObject(PauseScreen,kek);
+	// Load main menu screen
+	kek = (HBITMAP)LoadImage(0, "Main Menu.bmp",0, 0, 0, LR_LOADFROMFILE);
+	mainmenu=CreateCompatibleDC(screendc);
+	SelectObject(mainmenu,kek);
+	// Create a red pen
+	enc = CreatePen(PS_SOLID, 1, RGB(255,0,0));
+	// Create a green pen
+	plc = CreatePen(PS_SOLID, 1, RGB(0,255,0));
+	// Create default pen
+	def = CreatePen(PS_SOLID, 1, RGB(0,0,0));
+	// Create a white pen
+	brdrls = CreatePen(PS_SOLID, 1, RGB(255,255,255));
+	// Release screen
+	ss=SG_splash;
 	ReleaseDC(hwnd, screendc);
-	Rectangle(bufdc, 0,0,WIDTH, HEIGHT);
 }
 
 void Godfather(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
-	Rectangle(bufdc, 0,0,WIDTH, HEIGHT);
-	Sss.move();
-	Player.move();
-	Sss.Shoot();
-	//Player.Shoot();
-	Render(hwnd);
+	switch(ss)
+	{
+		case SG_ingame:
+			ClearScreen();
+			Player.move();
+			Player.Shoot();
+			Sss.move();
+			Sss.Shoot();
+			beta.UpdateAllBullets();
+			beta.DrawAllBullets();
+			Render(hwnd);
+			break;
+		case SG_pause:
+			DrawPauseScreen();
+			Render(hwnd);
+			break;
+		case SG_splash:
+			{
+				ClearScreen();
+				static int counter=0;
+				DrawMainMenu(counter);
+				counter=counter+4;
+				if(counter>255)ss=SG_mainmenu;
+				Render(hwnd);
+				break;
+			}
+		case SG_mainmenu:
+			DrawMainMenu(255);
+			Render(hwnd);
+			break;
+	}
 }
+
 
 void KeyDown(WPARAM w)
 {
@@ -245,8 +383,12 @@ void KeyDown(WPARAM w)
 			moveright=true;
 			break;
 		case 0x5a: //Z
-			shot=true;
-			break;
+			if(ss==SG_ingame)
+			{
+				shot=true;
+				spritechange=true;
+				break;
+			}
 	}
 }
 
@@ -261,7 +403,29 @@ void KeyUp(WPARAM w)
 			moveright=false;
 			break;
 		case 0x5a: //Z
-			shot=false;
+			if(ss==SG_ingame)
+			{
+				shot=false;
+				toggle=false;
+				spritechange=false;
+				spritelatch=3;
+				break;
+			}
+			else if (ss==SG_mainmenu)
+			{
+				ss=SG_ingame;
+				break;
+			}
+		case 0x50: //P
+			switch(ss)
+			{
+				case SG_ingame:
+					ss=SG_pause;
+					break;
+				case SG_pause:
+					ss=SG_ingame;
+					break;
+			}
 			break;
 	}
 }
